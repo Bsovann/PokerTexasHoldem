@@ -95,15 +95,18 @@ export default function LobbyScreen({ route, navigation }: any) {
       />
 
       {myPlayer?.is_host && (
-        <TouchableOpacity
-          style={[styles.startBtn, players.length < 2 && styles.disabled]}
-          onPress={startGame}
-          disabled={players.length < 2}
-        >
-          <Text style={styles.startBtnText}>
-            {players.length < 2 ? 'Waiting for players...' : 'Start Game'}
-          </Text>
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity
+            style={[styles.startBtn, players.length < 2 && styles.disabled]}
+            onPress={startGame}
+            disabled={players.length < 2}
+          >
+            <Text style={styles.startBtnText}>Start Game</Text>
+          </TouchableOpacity>
+          {players.length < 2 && (
+            <Text style={styles.waitingText}>Waiting for more players to join...</Text>
+          )}
+        </>
       )}
 
       {!myPlayer?.is_host && (
