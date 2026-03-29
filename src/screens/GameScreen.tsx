@@ -235,9 +235,10 @@ export default function GameScreen({ route, navigation }: any) {
     if (!room || !myPlayer) return;
     const state: GameState = { room, players };
     const { playerUpdate, roomUpdate } = applyFold(state, playerId);
+    const { id: _fid, ...fFields } = playerUpdate as any;
 
     await Promise.all([
-      supabase.from('players').update({ status: playerUpdate.status, has_acted_this_street: true }).eq('id', playerId),
+      supabase.from('players').update(fFields).eq('id', playerId),
       supabase.from('rooms').update(roomUpdate).eq('id', roomId),
     ]);
 
@@ -289,9 +290,10 @@ export default function GameScreen({ route, navigation }: any) {
 
     const state: GameState = { room, players };
     const { playerUpdate, roomUpdate } = applyFold(state, timedOutPlayer.id);
+    const { id: _tid, ...tFields } = playerUpdate as any;
 
     await Promise.all([
-      supabase.from('players').update({ status: playerUpdate.status, has_acted_this_street: true }).eq('id', timedOutPlayer.id),
+      supabase.from('players').update(tFields).eq('id', timedOutPlayer.id),
       supabase.from('rooms').update(roomUpdate).eq('id', roomId),
     ]);
 
@@ -312,8 +314,9 @@ export default function GameScreen({ route, navigation }: any) {
           if (isMyTurn && myPlayer.status === 'active') {
             const state: GameState = { room, players };
             const { playerUpdate, roomUpdate } = applyFold(state, playerId);
+            const { id: _lid, ...lFields } = playerUpdate as any;
             await Promise.all([
-              supabase.from('players').update({ status: 'left', has_acted_this_street: true }).eq('id', playerId),
+              supabase.from('players').update({ ...lFields, status: 'left' }).eq('id', playerId),
               supabase.from('rooms').update(roomUpdate).eq('id', roomId),
             ]);
           } else {

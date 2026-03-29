@@ -20,6 +20,7 @@ create table rooms (
   small_blind integer not null default 10,
   big_blind integer not null default 20,
   min_raise integer not null default 20,
+  acted_seats jsonb not null default '[]',
   created_at timestamptz not null default now()
 );
 
@@ -36,7 +37,6 @@ create table players (
   status player_status not null default 'waiting',
   is_host boolean not null default false,
   session_token varchar(64) not null,
-  has_acted_this_street boolean not null default false,
   created_at timestamptz not null default now(),
   unique(room_id, seat_index)
 );
