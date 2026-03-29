@@ -2,7 +2,7 @@ import { Card, createDeck, shuffle } from './deck';
 import { bestHand, getWinners, PlayerHand } from './handEvaluator';
 
 export type RoundType = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
-export type PlayerStatus = 'waiting' | 'active' | 'folded' | 'all_in' | 'out';
+export type PlayerStatus = 'waiting' | 'active' | 'folded' | 'all_in' | 'out' | 'left';
 
 export interface Player {
   id: string;
@@ -15,12 +15,13 @@ export interface Player {
   status: PlayerStatus;
   is_host: boolean;
   session_token: string;
+  has_acted_this_street?: boolean;
 }
 
 export interface GameRoom {
   id: string;
   code: string;
-  status: 'waiting' | 'playing' | 'finished';
+  status: 'waiting' | 'playing' | 'finished' | 'ended';
   community_cards: Card[];
   deck: Card[];
   pot: number;
@@ -37,7 +38,7 @@ export interface GameState {
   players: Player[];
 }
 
-// Returns seats of active players in order after dealer
+// Returns active (non-folded, non-out, non-left) players sorted by seat
 function activePlayers(players: Player[]): Player[] {
   return players
     .filter(p => p.status === 'active' || p.status === 'all_in')
@@ -49,7 +50,19 @@ function nextSeat(current: number, players: Player[]): number {
     .filter(p => p.status === 'active')
     .map(p => p.seat_index)
     .sort((a, b) => a - b);
+  if (actives.length === 0) return current;
   const next = actives.find(s => s > current);
+  return next !== undefined ? next : actives[0];
+}
+
+// Find the first active player to the LEFT of the dealer (wrapping around by seat_index)
+function firstActiveAfterDealer(dealerSeat: number, players: Player[]): number {
+  const actives = players
+    .filter(p => p.status === 'active')
+    .map(p => p.seat_index)
+    .sort((a, b) => a - b);
+  if (actives.length === 0) return dealerSeat;
+  const next = actives.find(s => s > dealerSeat);
   return next !== undefined ? next : actives[0];
 }
 
@@ -64,6 +77,7 @@ export function initializeGame(players: Player[], room: GameRoom): Partial<GameR
     status: 'active' as PlayerStatus,
     current_bet: 0,
     total_bet_this_round: 0,
+    has_acted_this_street: false,
   }));
 
   const remainingDeck = deck.slice(seated.length * 2);
@@ -107,7 +121,7 @@ export function applyFold(state: GameState, playerId: string): { playerUpdate: P
   const others = state.players.filter(p => p.id !== playerId);
   const stillActive = others.filter(p => p.status === 'active' || p.status === 'all_in');
 
-  const playerUpdate: Partial<Player> = { id: playerId, status: 'folded' };
+  const playerUpdate: Partial<Player> = { id: playerId, status: 'folded', has_acted_this_street: true };
 
   // If only one player left, they win
   if (stillActive.length === 1) {
@@ -128,12 +142,10 @@ export function applyFold(state: GameState, playerId: string): { playerUpdate: P
 export function applyBet(
   state: GameState,
   playerId: string,
-  amount: number // total amount to bet (includes previous current_bet)
+  amount: number // ADDITIONAL chips to add (e.g. callAmount = maxBet - player.current_bet)
 ): { playerUpdate: Partial<Player>; roomUpdate: Partial<GameRoom> } {
   const player = state.players.find(p => p.id === playerId)!;
-  const callAmount = Math.max(...state.players.map(p => p.current_bet)) - player.current_bet;
   const actualAmount = Math.min(amount, player.chips); // can't bet more than chips
-  const addedToPot = actualAmount;
 
   const newStatus: PlayerStatus = actualAmount >= player.chips ? 'all_in' : 'active';
 
@@ -143,15 +155,23 @@ export function applyBet(
     current_bet: player.current_bet + actualAmount,
     total_bet_this_round: player.total_bet_this_round + actualAmount,
     status: newStatus,
+    has_acted_this_street: true,
   };
 
   const updatedPlayers = state.players.map(p =>
     p.id === playerId ? { ...p, ...playerUpdate } : p
   );
 
+  // If this was a raise, update min_raise
+  const maxBetBefore = Math.max(...state.players.map(p => p.current_bet));
+  const newBet = player.current_bet + actualAmount;
+  const raiseAmount = newBet - maxBetBefore;
+  const newMinRaise = raiseAmount > 0 ? Math.max(state.room.min_raise, raiseAmount) : state.room.min_raise;
+
   const roomUpdate: Partial<GameRoom> = {
-    pot: state.room.pot + addedToPot,
+    pot: state.room.pot + actualAmount,
     current_player_seat: nextSeat(player.seat_index, updatedPlayers),
+    min_raise: newMinRaise,
   };
 
   return { playerUpdate, roomUpdate };
@@ -159,10 +179,22 @@ export function applyBet(
 
 export function shouldAdvanceStreet(state: GameState): boolean {
   const active = state.players.filter(p => p.status === 'active');
+  // If no active players (all folded or all-in), advance
   if (active.length === 0) return true;
+  // If only one active player and rest are folded/all-in, check if they've acted
+  if (active.length === 1) {
+    const allIn = state.players.filter(p => p.status === 'all_in');
+    // If there are all-in players and the single active player has matched, advance
+    if (allIn.length > 0) {
+      const maxBet = Math.max(...state.players.filter(p => p.status === 'active' || p.status === 'all_in').map(p => p.current_bet));
+      return active[0].current_bet >= maxBet && (active[0].has_acted_this_street === true);
+    }
+  }
 
   const maxBet = Math.max(...state.players.filter(p => p.status === 'active' || p.status === 'all_in').map(p => p.current_bet));
-  return active.every(p => p.current_bet === maxBet);
+
+  // Every active player must have acted AND matched the highest bet
+  return active.every(p => p.current_bet === maxBet && p.has_acted_this_street === true);
 }
 
 export function advanceStreet(state: GameState): { roomUpdate: Partial<GameRoom>; playerUpdates: Partial<Player>[] } {
@@ -184,21 +216,20 @@ export function advanceStreet(state: GameState): { roomUpdate: Partial<GameRoom>
     nextRound = 'showdown';
   }
 
-  // Reset bets for new street
+  // Reset bets and has_acted for new street
   const playerUpdates: Partial<Player>[] = players
     .filter(p => p.status === 'active' || p.status === 'all_in')
-    .map(p => ({ id: p.id, current_bet: 0 }));
+    .map(p => ({ id: p.id, current_bet: 0, has_acted_this_street: false }));
 
-  const firstActive = players
-    .filter(p => p.status === 'active')
-    .sort((a, b) => a.seat_index - b.seat_index)[0];
+  // First active player to the left of the dealer (wrapping around)
+  const firstSeat = firstActiveAfterDealer(room.dealer_seat, players);
 
   return {
     roomUpdate: {
       current_round: nextRound,
       community_cards: community,
       deck,
-      current_player_seat: firstActive?.seat_index ?? room.dealer_seat,
+      current_player_seat: firstSeat,
       min_raise: room.big_blind,
     },
     playerUpdates,

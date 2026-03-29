@@ -2,16 +2,19 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Player } from '../engine/gameLogic';
 import Card from './Card';
+import TurnTimer from './TurnTimer';
 
 interface Props {
   player: Player;
   isCurrentTurn: boolean;
   isDealer: boolean;
   showCards: boolean;
+  onTimeout?: () => void;
+  turnKey?: string;
 }
 
-export default function PlayerSeat({ player, isCurrentTurn, isDealer, showCards }: Props) {
-  const isFolded = player.status === 'folded' || player.status === 'out';
+export default function PlayerSeat({ player, isCurrentTurn, isDealer, showCards, onTimeout, turnKey }: Props) {
+  const isFolded = player.status === 'folded' || player.status === 'out' || player.status === 'left';
 
   return (
     <View style={[styles.seat, isCurrentTurn && styles.activeSeat, isFolded && styles.foldedSeat]}>
@@ -27,7 +30,7 @@ export default function PlayerSeat({ player, isCurrentTurn, isDealer, showCards 
             <Card card={player.hole_cards[0]} small />
             <Card card={player.hole_cards[1]} small />
           </>
-        ) : player.status !== 'waiting' ? (
+        ) : player.status !== 'waiting' && player.status !== 'left' ? (
           <>
             <Card faceDown small />
             <Card faceDown small />
@@ -36,6 +39,10 @@ export default function PlayerSeat({ player, isCurrentTurn, isDealer, showCards 
       </View>
       {player.status === 'folded' && <Text style={styles.statusLabel}>FOLD</Text>}
       {player.status === 'all_in' && <Text style={[styles.statusLabel, styles.allIn]}>ALL IN</Text>}
+      {player.status === 'left' && <Text style={[styles.statusLabel, styles.leftLabel]}>LEFT</Text>}
+      {isCurrentTurn && onTimeout && turnKey && (
+        <TurnTimer isActive={isCurrentTurn} onTimeout={onTimeout} turnKey={turnKey} />
+      )}
     </View>
   );
 }
@@ -70,4 +77,5 @@ const styles = StyleSheet.create({
   cards: { flexDirection: 'row', marginTop: 4 },
   statusLabel: { color: '#ff5555', fontSize: 9, fontWeight: 'bold', marginTop: 2 },
   allIn: { color: '#ff9900' },
+  leftLabel: { color: '#888' },
 });

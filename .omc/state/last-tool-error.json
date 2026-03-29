@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"ls /usr/local/bin/pod 2>/dev/null && echo \\\"found\\\" || echo \\\"not found\\\" && brew list cocoapods 2>/dev/null || echo \\\"not in brew\\\" && ls /opt/homebrew/bin/pod 2>/dev/null && echo \\\"found...",
+  "error": "Exit code 1\nnot found\nnot in brew",
+  "timestamp": "2026-03-29T05:22:39.076Z",
+  "retry_count": 1
+}
