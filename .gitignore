@@ -70,6 +70,10 @@ yarn-error.log
 .env
 .env.local
 
+# OMC internal state
+.omc/
+ios/.omc/
+
 # Yarn
 .yarn/*
 !.yarn/patches
