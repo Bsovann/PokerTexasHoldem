@@ -2,9 +2,9 @@
 create extension if not exists "pgcrypto";
 
 -- Enums
-create type room_status as enum ('waiting', 'playing', 'finished');
+create type room_status as enum ('waiting', 'playing', 'finished', 'ended');
 create type round_type as enum ('preflop', 'flop', 'turn', 'river', 'showdown');
-create type player_status as enum ('waiting', 'active', 'folded', 'all_in', 'out');
+create type player_status as enum ('waiting', 'active', 'folded', 'all_in', 'out', 'left');
 
 -- Rooms table
 create table rooms (
@@ -36,6 +36,7 @@ create table players (
   status player_status not null default 'waiting',
   is_host boolean not null default false,
   session_token varchar(64) not null,
+  has_acted_this_street boolean not null default false,
   created_at timestamptz not null default now(),
   unique(room_id, seat_index)
 );

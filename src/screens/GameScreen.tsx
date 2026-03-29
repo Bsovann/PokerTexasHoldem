@@ -75,7 +75,7 @@ export default function GameScreen({ route, navigation }: any) {
   async function fetchState() {
     const [{ data: roomData }, { data: playersData }, { data: myData }] = await Promise.all([
       supabase.from('rooms').select().eq('id', roomId).single(),
-      supabase.from('players').select('id,nickname,seat_index,chips,current_bet,total_bet_this_round,status,is_host,session_token,has_acted_this_street').eq('room_id', roomId),
+      supabase.from('players').select('*').eq('room_id', roomId),
       supabase.from('players').select('hole_cards').eq('id', playerId).single(),
     ]);
 
