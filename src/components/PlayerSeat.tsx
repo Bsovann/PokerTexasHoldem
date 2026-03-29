@@ -13,7 +13,7 @@ interface Props {
   turnKey?: string;
 }
 
-export default function PlayerSeat({ player, isCurrentTurn, isDealer, showCards, onTimeout, turnKey }: Props) {
+function PlayerSeat({ player, isCurrentTurn, isDealer, showCards, onTimeout, turnKey }: Props) {
   const isFolded = player.status === 'folded' || player.status === 'out' || player.status === 'left';
 
   return (
@@ -46,6 +46,8 @@ export default function PlayerSeat({ player, isCurrentTurn, isDealer, showCards,
     </View>
   );
 }
+
+export default React.memo(PlayerSeat);
 
 const styles = StyleSheet.create({
   seat: {

@@ -7,7 +7,7 @@ interface Props {
   cards: CardType[];
 }
 
-export default function CommunityCards({ cards }: Props) {
+function CommunityCards({ cards }: Props) {
   return (
     <View style={styles.container}>
       {[0, 1, 2, 3, 4].map(i => (
@@ -16,6 +16,8 @@ export default function CommunityCards({ cards }: Props) {
     </View>
   );
 }
+
+export default React.memo(CommunityCards);
 
 const styles = StyleSheet.create({
   container: {

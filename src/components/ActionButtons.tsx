@@ -12,7 +12,7 @@ interface Props {
   onRaise: (amount: number) => void;
 }
 
-export default function ActionButtons({
+function ActionButtons({
   canCheck,
   callAmount,
   minRaise,
@@ -69,6 +69,8 @@ export default function ActionButtons({
     </View>
   );
 }
+
+export default React.memo(ActionButtons);
 
 const styles = StyleSheet.create({
   container: { padding: 12, backgroundColor: '#0d2b0d' },

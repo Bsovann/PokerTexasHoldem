@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import { supabase } from '../lib/supabase';
 import {
   Player,
   GameRoom,
   GameState,
+  initializeGame,
   applyFold,
   applyBet,
   shouldAdvanceStreet,
@@ -13,6 +14,7 @@ import {
 } from '../engine/gameLogic';
 import PlayerSeat from '../components/PlayerSeat';
 import CommunityCards from '../components/CommunityCards';
+import Card from '../components/Card';
 import PotDisplay from '../components/PotDisplay';
 import ActionButtons from '../components/ActionButtons';
 
@@ -53,20 +55,28 @@ export default function GameScreen({ route, navigation }: any) {
   const celebrationOpacity = useRef(new Animated.Value(0)).current;
   const confettiPieces = useRef<ConfettiPiece[]>(createConfettiPieces()).current;
 
-  const myPlayer = players.find(p => p.id === playerId);
+  const myPlayer = useMemo(() => players.find(p => p.id === playerId), [players, playerId]);
   const isMyTurn = room?.current_player_seat === myPlayer?.seat_index;
   const isHost = myPlayer?.is_host;
 
   // Unique key for turn timer reset
   const turnKey = room ? `${room.current_round}-${room.current_player_seat}` : '';
 
+  // Debounce ref to batch rapid Supabase subscription events (e.g. N player updates at game start)
+  const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     fetchState();
 
+    const debouncedFetch = () => {
+      if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current);
+      fetchDebounceRef.current = setTimeout(() => fetchState(), 80);
+    };
+
     const sub = supabase
       .channel(`game:${roomId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, () => fetchState())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players', filter: `room_id=eq.${roomId}` }, () => fetchState())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, debouncedFetch)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players', filter: `room_id=eq.${roomId}` }, debouncedFetch)
       .subscribe();
 
     return () => { supabase.removeChannel(sub); };
@@ -221,7 +231,7 @@ export default function GameScreen({ route, navigation }: any) {
     const newDealer = sorted[nextDealerIdx]?.seat_index ?? sorted[0].seat_index;
 
     // Re-init game
-    const init = require('../engine/gameLogic').initializeGame(active, { ...r, dealer_seat: newDealer });
+    const init = initializeGame(active, { ...r, dealer_seat: newDealer });
     const { playerUpdates, ...roomUpdate } = init;
 
     await supabase.from('rooms').update(roomUpdate).eq('id', roomId);
@@ -367,20 +377,28 @@ export default function GameScreen({ route, navigation }: any) {
     ]);
   }
 
+  // All useMemo hooks must be before any conditional returns
+  const { topSeats, midRightSeats, midLeftSeats, bottomSeats } = useMemo(() => {
+    const sorted = [...players].sort((a, b) => a.seat_index - b.seat_index);
+    return {
+      topSeats: sorted.filter(p => p.seat_index < 2),
+      midRightSeats: sorted.filter(p => p.seat_index === 2),
+      midLeftSeats: sorted.filter(p => p.seat_index === 5),
+      bottomSeats: sorted.filter(p => p.seat_index >= 3 && p.seat_index <= 4),
+    };
+  }, [players]);
+
+  const maxBetMemo = useMemo(
+    () => players.length ? Math.max(...players.map(p => p.current_bet)) : 0,
+    [players]
+  );
+
   if (!room || !myPlayer) {
     return <View style={styles.loading}><Text style={styles.loadingText}>Loading...</Text></View>;
   }
 
-  const maxBet = Math.max(...players.map(p => p.current_bet));
-  const callAmount = maxBet - myPlayer.current_bet;
+  const callAmount = maxBetMemo - myPlayer.current_bet;
   const canCheck = callAmount === 0;
-
-  // Landscape layout: left seats, table center, right seats
-  const sorted = [...players].sort((a, b) => a.seat_index - b.seat_index);
-  const topSeats = sorted.filter(p => p.seat_index < 2);
-  const midRightSeats = sorted.filter(p => p.seat_index === 2);
-  const midLeftSeats = sorted.filter(p => p.seat_index === 5);
-  const bottomSeats = sorted.filter(p => p.seat_index >= 3 && p.seat_index <= 4);
 
   return (
     <View style={styles.container}>
@@ -504,10 +522,9 @@ export default function GameScreen({ route, navigation }: any) {
       <View style={styles.myCards}>
         <Text style={styles.myCardsLabel}>Your hand</Text>
         <View style={styles.myCardsRow}>
-          {myHoleCards.map((card, i) => {
-            const CardComp = require('../components/Card').default;
-            return <CardComp key={i} card={card} />;
-          })}
+          {myHoleCards.map((card, i) => (
+            <Card key={i} card={card} />
+          ))}
         </View>
       </View>
 

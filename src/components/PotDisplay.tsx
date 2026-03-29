@@ -6,7 +6,7 @@ interface Props {
   round: string;
 }
 
-export default function PotDisplay({ pot, round }: Props) {
+function PotDisplay({ pot, round }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.round}>{round.toUpperCase()}</Text>
@@ -14,6 +14,8 @@ export default function PotDisplay({ pot, round }: Props) {
     </View>
   );
 }
+
+export default React.memo(PotDisplay);
 
 const styles = StyleSheet.create({
   container: { alignItems: 'center', marginVertical: 8 },
